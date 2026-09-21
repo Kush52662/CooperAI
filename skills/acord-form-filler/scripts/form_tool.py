@@ -2,6 +2,8 @@
 """Deterministic PDF tools. No model calls, case answers, or automatic source precedence."""
 import argparse
 import csv
+import copy
+import math
 import hashlib
 import json
 import re
@@ -15,6 +17,40 @@ from pypdf.generic import NameObject, TextStringObject
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / 'assets/acord_125.pdf'
+
+
+REQUEST_COLUMNS = {
+    'output_form': 'Requested Form',
+    'transaction_status': 'Transaction Status',
+    'proposed_effective_date': 'Proposed Effective Date',
+    'proposed_expiration_date': 'Proposed Expiration Date',
+    'requested_lines_of_business': 'Requested Lines of Business',
+}
+
+
+def submission_request(row, legacy=None):
+    present = [column for column in REQUEST_COLUMNS.values() if column in row]
+    if present:
+        missing = [column for column in REQUEST_COLUMNS.values() if not row.get(column, '').strip()]
+        if missing:
+            raise ValueError('Missing submission columns/values: ' + ', '.join(missing))
+        request = {key: row[column].strip() for key, column in REQUEST_COLUMNS.items()}
+        request['requested_lines_of_business'] = [v.strip() for v in request['requested_lines_of_business'].split(';') if v.strip()]
+        if legacy is not None:
+            for key, value in request.items():
+                other = legacy.get(key)
+                equal = sorted(value) == sorted(other) if isinstance(value, list) and isinstance(other, list) else value == other
+                if not equal:
+                    raise ValueError('Conflicting CSV and submission request: ' + key)
+        return request
+    if legacy is None:
+        raise ValueError('Supply submission columns in CSV or a legacy submission_request.json.')
+    return legacy
+
+
+def save_new(path, value):
+    with Path(path).open('x') as handle:
+        handle.write(json.dumps(value, indent=2, ensure_ascii=False) + '\n')
 
 
 def now():
@@ -105,15 +141,17 @@ def render(pdf, folder):
 def prepare(input_dir, run_dir):
     input_dir, run_dir = Path(input_dir).resolve(), Path(run_dir).resolve()
     names = ['ams360_customer_policy_export.csv', 'insurance_document.pdf', 'submission_request.json']
-    paths = [input_dir / n for n in names]
+    paths = [input_dir / n for n in names[:2]]
     if not all(p.is_file() for p in paths):
-        raise ValueError('Provide exactly the CSV, insurance PDF, and submission request described in the skill.')
+        raise ValueError('Provide the account CSV and insurance PDF.')
+    legacy_path = input_dir / names[2]
+    if legacy_path.is_file(): paths.append(legacy_path)
     with paths[0].open(encoding='utf-8-sig', newline='') as handle:
         table = csv.DictReader(handle)
         rows = list(table)
         if len(rows) != 1 or len(set(table.fieldnames or [])) != len(table.fieldnames or []) or any(k is None or v is None for row in rows for k, v in row.items()):
             raise ValueError('CSV must contain unique headers and exactly one well-formed account row.')
-    request = read(paths[2])
+    request = submission_request(rows[0], read(legacy_path) if legacy_path.is_file() else None)
     if request.get('output_form') != 'ACORD 125 (2016/03)':
         raise ValueError('Only ACORD 125 (2016/03) is supported.')
     start = datetime.strptime(request['proposed_effective_date'], '%m/%d/%Y')
@@ -162,7 +200,7 @@ def validate(packet, run_dir):
     pdf = PdfReader(files['insurance_document.pdf'])
     with files['ams360_customer_policy_export.csv'].open(encoding='utf-8-sig', newline='') as h:
         csv_row = next(csv.DictReader(h))
-    request = read(files['submission_request.json'])
+    request = submission_request(csv_row, read(files['submission_request.json']) if 'submission_request.json' in files else None)
     seen, semantics = set(), set()
     def check_evidence(ev):
         file = ev['file']
@@ -208,7 +246,7 @@ def validate(packet, run_dir):
             continue
         if not a['evidence'] or not isinstance(value, str) or not value.strip():
             errors.append(f'Filled values require nonempty value and evidence: {fid}'); continue
-        if status == 'user_confirmed' and not any(e['file'] == 'user' for e in a['evidence']):
+        if status == 'user_confirmed' and not any(e['file'] == 'user' and any(h['field_id'] == fid and h['statement'] == e['quote'] for h in packet['history']) for e in a['evidence']):
             errors.append(f'User-confirmed value lacks user evidence: {fid}')
         if re.search(r'Signature|Initials', fid, re.I):
             errors.append(f'Electronic signing is not supported: {fid}')
@@ -230,8 +268,8 @@ def validate(packet, run_dir):
                 errors.append(f'Invalid amount: {fid}')
         date_key = ('proposed_effective_date' if 'Policy_EffectiveDate_' in fid else
                     'proposed_expiration_date' if 'Policy_ExpirationDate_' in fid else None)
-        if date_key and (value != request[date_key] or not any(e['file'] == 'submission_request.json' and e.get('key') == date_key for e in a['evidence'])):
-            errors.append(f'Proposed dates must match submission_request.json: {fid}')
+        if date_key and (value != request[date_key] or not any((e['file'] == 'submission_request.json' and e.get('key') == date_key) or (e['file'] == 'ams360_customer_policy_export.csv' and e.get('column') == REQUEST_COLUMNS[date_key]) for e in a['evidence'])):
+            errors.append(f'Proposed dates must match submission inputs: {fid}')
     for issue in packet['issues']:
         for ev in issue['evidence']:
             check_evidence(ev)
@@ -286,7 +324,7 @@ def fill(packet_path, run_dir):
     packet = read(packet_path)
     errors = validate(packet, run_dir)
     if errors: raise ValueError('\n'.join(errors))
-    if not approved_values(packet): raise ValueError('No supported assignments to fill.')
+    if not packet['assignments']: raise ValueError('No assignments to render.')
     out = run_dir / f'revision-{packet["revision"]:03d}'
     out.mkdir(exist_ok=False)
     writer = PdfWriter()
@@ -318,7 +356,9 @@ def fill(packet_path, run_dir):
     for a in unresolved:
         lines.append(f'- **{a["semantic"]}** ({a["status"]}): {a["note"]}')
         for alt in a['alternatives']: lines.append(f'  - {alt["value"]}')
-    for issue in packet['issues']: lines.append(f'- **{issue["field"]}**: {issue["message"]}')
+    lines += ['', '## Retained source questions', '']
+    for issue in review_packet(packet_path)['source_issues']:
+        lines.append(f'- **{issue["field"]}**: {issue["message"]} [{issue["context"]}]')
     lines += ['', '## Provenance', '', '| Field | Value | Sources |', '|---|---|---|']
     for a in packet['assignments']:
         if a['status'] not in ('supported', 'user_confirmed'): continue
@@ -346,6 +386,169 @@ def resolve_value(packet_path, run_dir, fid, value, statement):
     return {'packet': str(next_path), 'note': 'Historical alternatives preserved. Reconcile related issues before filling.'}
 
 
+def revision_head(run_dir):
+    """Saved packets are the revision ledger; no separate database or pointer."""
+    run = Path(run_dir)
+    paths = [run/'packet.json', *run.glob('packet-r*.json'), *run.glob('revision-*/packet.json')]
+    return max((read(p)['revision'] for p in paths if p.is_file()), default=0)
+
+
+def checked_packet(packet_path, run_dir):
+    packet = read(packet_path)
+    errors = validate(packet, run_dir)
+    if errors: raise ValueError('\n'.join(errors))
+    if packet['revision'] != revision_head(run_dir):
+        raise ValueError('Stale base revision. Review the latest saved packet before editing.')
+    return packet
+
+
+def corrected_packet(base, changes, run_dir):
+    if not isinstance(changes, list) or not changes:
+        raise ValueError('Corrections must be a nonempty list.')
+    packet = copy.deepcopy(base)
+    _, fields = inventory()
+    seen = set()
+    for change in changes:
+        if not isinstance(change, dict) or set(change) - {'field_id', 'semantic', 'value', 'statement'} or not {'field_id', 'value', 'statement'} <= set(change):
+            raise ValueError('Each correction needs field_id, value, statement; semantic is required for additions.')
+        fid, value, statement = change['field_id'], change['value'], change['statement']
+        if not isinstance(fid, str) or fid not in fields or fid in seen:
+            raise ValueError('Unknown or duplicate correction field.')
+        seen.add(fid)
+        if re.search(r'Signature|Initials', fid, re.I) or fields[fid]['flags'] & 1:
+            raise ValueError('Cannot correct signatures or read-only fields.')
+        if not isinstance(statement, str) or not statement.strip():
+            raise ValueError('An explicit, nonempty user statement is required.')
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ValueError('Use a nonempty string, or null to explicitly clear a value.')
+        item = next((a for a in packet['assignments'] if a['field_id'] == fid), None)
+        if item is None:
+            semantic = change.get('semantic')
+            if not isinstance(semantic, str) or not semantic.strip():
+                raise ValueError('New assignments require a semantic name.')
+            item = {'field_id': fid, 'semantic': semantic, 'value': None, 'status': 'missing',
+                    'evidence': [], 'alternatives': [], 'note': ''}
+            packet['assignments'].append(item)
+            previous_status = 'unassigned'
+        else:
+            if 'semantic' in change and change['semantic'] != item['semantic']:
+                raise ValueError('A correction cannot rename an existing semantic key.')
+            previous_status = item['status']
+        packet['history'].append({'at': now(), 'field_id': fid, 'previous_value': item['value'],
+                                  'previous_status': previous_status, 'statement': statement})
+        item.update(value=value, status='missing' if value is None else 'user_confirmed')
+        item['evidence'].append({'file': 'user', 'quote': statement})
+        if value is None: item['note'] = 'Explicitly cleared by user; remains unanswered.'
+    packet['revision'] = base['revision'] + 1
+    errors = validate(packet, run_dir)
+    if errors: raise ValueError('\n'.join(errors))
+    return packet
+
+
+def stage_corrections(packet_path, run_dir, changes, out):
+    base = checked_packet(packet_path, run_dir)
+    corrected_packet(base, changes, run_dir)
+    stage = {'base_revision': base['revision'], 'base_sha256': digest(packet_path),
+             'manifest_sha256': digest(Path(run_dir)/'manifest.json'), 'changes': changes}
+    save_new(out, stage)
+    return {'stage': str(out), 'base_revision': base['revision'], 'corrections': len(changes), 'applied': False}
+
+
+def apply_corrections(packet_path, run_dir, stage_path):
+    base = checked_packet(packet_path, run_dir)
+    stage = read(stage_path)
+    if set(stage) != {'base_revision', 'base_sha256', 'manifest_sha256', 'changes'}:
+        raise ValueError('Invalid staged correction record.')
+    if (stage['base_revision'] != base['revision'] or stage['base_sha256'] != digest(packet_path)
+            or stage['manifest_sha256'] != digest(Path(run_dir)/'manifest.json')):
+        raise ValueError('Stale or wrong-run corrections; stage against the current packet.')
+    packet = corrected_packet(base, stage['changes'], run_dir)
+    path = Path(run_dir)/f'packet-r{packet["revision"]:03d}.json'
+    save_new(path, packet)
+    return {'packet': str(path), 'revision': packet['revision'], 'corrections': len(stage['changes']),
+            'next': 'Validate, fill, inspect all output pages, and deliver the new PDF.'}
+
+
+def review_packet(packet_path, before=None):
+    packet = read(packet_path)
+    previous = read(before) if before else None
+    if previous and (previous['sources'] != packet['sources'] or previous['template_sha256'] != packet['template_sha256']):
+        raise ValueError('Cannot compare packets from different sources or templates.')
+    prior = {a['field_id']: a for a in previous['assignments']} if previous else {}
+    current = {a['field_id']: a for a in packet['assignments']}
+    changes = []
+    if previous:
+        for fid in sorted(current.keys() | prior.keys()):
+            old, new = prior.get(fid), current.get(fid)
+            if old != new:
+                changes.append({'field_id': fid, 'semantic': (new or old)['semantic'],
+                                'before': old['value'] if old else None, 'after': new['value'] if new else None,
+                                'before_status': old['status'] if old else 'unassigned',
+                                'after_status': new['status'] if new else 'unassigned'})
+    unresolved = [a for a in packet['assignments'] if a['status'] in ('missing', 'conflict')]
+    confirmed = {a['semantic'] for a in packet['assignments'] if a['status'] == 'user_confirmed'}
+    confirmed.update(a['field_id'] for a in packet['assignments'] if a['status'] == 'user_confirmed')
+    return {'revision': packet['revision'], 'packet_sha256': digest(packet_path),
+            'assignments': packet['assignments'], 'unresolved': unresolved,
+            'counts': {'filled': len(approved_values(packet)), 'unresolved': len(unresolved), 'source_issues': len(packet['issues'])},
+            'source_issues': [dict(i, context='retained source issue; matching field corrected' if i['field'] in confirmed else 'requires review') for i in packet['issues']],
+            'changes': changes, 'history': packet['history']}
+
+
+def review_markdown(report):
+    lines = [f'# Draft review — revision {report["revision"]}', '',
+             f'{report["counts"]["filled"]} filled; {report["counts"]["unresolved"]} unresolved fields.', '', '## Fields']
+    for a in report['assignments']:
+        label = a['semantic'].replace('_', ' ').replace('.', ' / ')
+        lines.append(f'- {label}: {a["value"] or "Blank"} ({a["status"]})')
+        for alt in a['alternatives']:
+            locations = ', '.join(e['file'] + (f' page {e["page"]}' if e.get('page') else ' '+e.get('column', e.get('key', ''))) for e in alt['evidence'])
+            lines.append(f'  - Alternative: {alt["value"]} — {locations}')
+    lines += ['', '## Changes']
+    for c in report['changes']: lines.append(f'- {c["semantic"]}: {c["before"]} → {c["after"]}')
+    lines += ['', '## Source questions (retained separately)']
+    for i in report['source_issues']: lines.append(f'- {i["field"]}: {i["message"]} [{i["context"]}]')
+    return '\n'.join(lines) + '\n'
+
+
+def field_preview(fid, pdf, out):
+    import pypdfium2 as pdfium
+    _, fields = inventory()
+    if fid not in fields: raise ValueError('Unknown template field.')
+    reader, actual = inventory(pdf)
+    template_reader = PdfReader(TEMPLATE)
+    if len(reader.pages) != len(template_reader.pages) or fid not in actual or actual[fid]['widgets'] != fields[fid]['widgets']:
+        raise ValueError('Preview requires the known template or its generated draft.')
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=False)
+    doc = pdfium.PdfDocument(str(pdf))
+    previews = []
+    try:
+        doc.init_forms()
+        for n, widget in enumerate(fields[fid]['widgets'], 1):
+            page = doc[widget['page']-1]
+            try:
+                if reader.pages[widget['page']-1].rotation:
+                    raise ValueError('Rotated-page previews are unsupported.')
+                width, height = page.get_size()
+                x0,y0,x1,y1 = widget['rect']
+                rect = [max(0, x0-96), max(0, y0-36), min(width, x1+96), min(height, y1+36)]
+                bitmap = page.render(scale=2, may_draw_forms=True)
+                try:
+                    image = bitmap.to_pil()
+                    box = [math.floor(rect[0]*image.width/width), math.floor((height-rect[3])*image.height/height),
+                           math.ceil(rect[2]*image.width/width), math.ceil((height-rect[1])*image.height/height)]
+                    path = out/f'field-{n}-page-{widget["page"]}.png'
+                    image.crop(box).save(path)
+                    previews.append({'path': str(path), 'page': widget['page'], 'field_rect': widget['rect'], 'crop_rect': rect, 'pixel_box': box})
+                finally: bitmap.close()
+            finally: page.close()
+    finally: doc.close()
+    result = {'field_id': fid, 'label': fields[fid]['label'], 'pdf_sha256': digest(pdf), 'previews': previews}
+    save(out/'preview.json', result)
+    return result
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     sp = ap.add_subparsers(dest='cmd', required=True)
@@ -358,6 +561,11 @@ def main():
     p = sp.add_parser('render'); p.add_argument('--pdf', required=True); p.add_argument('--out', required=True)
     p = sp.add_parser('resolve'); p.add_argument('--packet', required=True); p.add_argument('--run-dir', required=True)
     p.add_argument('--field', required=True); p.add_argument('--value', required=True); p.add_argument('--statement', required=True)
+    p = sp.add_parser('review'); p.add_argument('--packet', required=True); p.add_argument('--before'); p.add_argument('--format', choices=['json','markdown'], default='json')
+    p = sp.add_parser('stage-corrections'); p.add_argument('--packet', required=True); p.add_argument('--run-dir', required=True)
+    p.add_argument('--changes', required=True); p.add_argument('--out', required=True)
+    p = sp.add_parser('apply-corrections'); p.add_argument('--packet', required=True); p.add_argument('--run-dir', required=True); p.add_argument('--stage', required=True)
+    p = sp.add_parser('field-preview'); p.add_argument('--field', required=True); p.add_argument('--pdf', default=str(TEMPLATE)); p.add_argument('--out', required=True)
     p = sp.add_parser('record-visual-review'); p.add_argument('--revision-dir', required=True)
     p.add_argument('--result', choices=['pass','fail'], required=True); p.add_argument('--note', required=True)
     args = ap.parse_args()
@@ -381,6 +589,12 @@ def main():
             if not result['technical_pass']: print(json.dumps(result)); return 1
         elif args.cmd == 'render': render(args.pdf,args.out); result = {'pages':args.out}
         elif args.cmd == 'resolve': result = resolve_value(args.packet,args.run_dir,args.field,args.value,args.statement)
+        elif args.cmd == 'review':
+            result = review_packet(args.packet, args.before)
+            if args.format == 'markdown': print(review_markdown(result)); return 0
+        elif args.cmd == 'stage-corrections': result = stage_corrections(args.packet, args.run_dir, read(args.changes), args.out)
+        elif args.cmd == 'apply-corrections': result = apply_corrections(args.packet, args.run_dir, args.stage)
+        elif args.cmd == 'field-preview': result = field_preview(args.field, args.pdf, args.out)
         else:
             folder = Path(args.revision_dir)
             path = folder / 'verification.json'

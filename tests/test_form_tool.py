@@ -27,7 +27,7 @@ class FormTests(unittest.TestCase):
         import csv
         with (ROOT/'sample input data/00_clean_walkthrough/ams360_customer_policy_export.csv').open() as h:
             cls.row=next(csv.DictReader(h))
-        cls.request=tool.read(ROOT/'sample input data/00_clean_walkthrough/submission_request.json')
+        cls.request=tool.submission_request(cls.row)
 
     @classmethod
     def tearDownClass(cls): cls.tmp.cleanup()
@@ -90,7 +90,7 @@ class FormTests(unittest.TestCase):
     def test_pdf_roundtrip_preserves_unassigned_fields_and_checkboxes(self):
         p=self.packet()
         p['assignments'].append({'semantic':'policy.transaction','field_id':QUOTE,'value':'/1','status':'supported',
-            'evidence':[{'file':'submission_request.json','key':'transaction_status','quote':'QUOTE'}],
+            'evidence':[{'file':'ams360_customer_policy_export.csv','column':'Transaction Status','quote':'QUOTE'}],
             'alternatives':[],'note':''})
         path=Path(self.tmp.name)/'packet.json';tool.save(path,p)
         with patch.object(tool,'render'):

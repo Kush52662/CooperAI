@@ -16,7 +16,7 @@ with ZipFile(DIST/'acord-form-filler.zip','w',ZIP_DEFLATED) as z:
  for p in sorted(files):z.write(p,Path('acord-form-filler')/p.relative_to(SKILL))
 with ZipFile(DIST/'demo-inputs.zip','w',ZIP_DEFLATED) as z:
  for case in sorted((ROOT/'sample input data').glob('[0-9][0-9]_*')):
-  for name in ['ams360_customer_policy_export.csv','insurance_document.pdf','submission_request.json']:
+  for name in ['ams360_customer_policy_export.csv','insurance_document.pdf']:
    p=case/name;z.write(p,Path(case.name)/name)
 for filename in ['acord-form-filler.zip','demo-inputs.zip']:
  with ZipFile(DIST/filename) as z:

@@ -5,7 +5,7 @@
   "properties": {
     "schema_version": {"const":"1.0"},
     "template_sha256": {"type":"string","pattern":"^[a-f0-9]{64}$"},
-    "sources": {"type":"array","minItems":3,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["file","sha256"],"properties":{"file":{"type":"string"},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}}}},
+    "sources": {"type":"array","minItems":2,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["file","sha256"],"properties":{"file":{"type":"string"},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}}}},
     "revision":{"type":"integer","minimum":1},
     "assignments":{"type":"array","items":{"$ref":"#/$defs/assignment"}},
     "issues":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["field","message","evidence"],"properties":{"field":{"type":"string","minLength":1},"message":{"type":"string","minLength":1},"evidence":{"type":"array","items":{"$ref":"#/$defs/evidence"}}}}},

@@ -4,11 +4,12 @@ Source-backed development and demo data for the Cooper AI ACORD 125 form-filler 
 
 ## How to use it
 
-Upload only the three files inside one numbered case folder:
+Upload only these two files inside one numbered case folder:
 
 1. `ams360_customer_policy_export.csv` - one-row AMS360-style customer/policy export.
 2. `insurance_document.pdf` - public insurance evidence for the same account.
-3. `submission_request.json` - the requested transaction, line of business, and proposed application period.
+
+The CSV contains `Requested Form`, `Transaction Status`, `Proposed Effective Date`, `Proposed Expiration Date`, and `Requested Lines of Business` (semicolon-separated). Legacy `submission_request.json` remains supported by the tool but is not included in the sample folders. If supplied together, the submission values must agree.
 
 Use `output_template/acord_125_blank_fillable.pdf` as the output form. Never upload `_evaluation/`; it contains reviewer-only expected answers.
 

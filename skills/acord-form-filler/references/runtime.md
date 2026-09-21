@@ -2,7 +2,7 @@
 
 ## Claude chat
 
-Install the skill ZIP using Claude's custom-skill installation UI; enable code execution. Upload one case's three source files in the chat, not reviewer files. The skill is instruction-driven: Claude performs the reasoning and calls scripts in its execution environment. No API key or second model call is needed.
+Install the skill ZIP using Claude's custom-skill installation UI; enable code execution. Upload one case's CSV with submission columns and insurance PDF in the chat, not reviewer files. The skill is instruction-driven: Claude performs the reasoning and calls scripts in its execution environment. No API key or second model call is needed.
 
 Locate the installed SKILL.md and uploaded files using the environment's file tools. Do not hardcode /mnt paths. Run the doctor command using the available Python. If dependencies are missing and package installation is available, run `python -m pip install -r "$SKILL_ROOT/requirements.txt"`. If installation is unavailable, report the exact missing dependency; do not claim the skill ran successfully. A fresh Claude-chat install must be tested before the onsite; local tool tests do not establish Claude-chat compatibility.
 
@@ -13,6 +13,10 @@ Use native PDF vision plus the tool's rendered pages and embedded text. Open gen
 The same folder can be installed as a local Codex skill or explicitly invoked by its SKILL.md path. Run from a task workspace. Use its local Python environment (create a venv and install requirements if needed). Resolve paths from the skill directory. Use local file/image tools to inspect all source and output pages; do not claim to have read a PDF visually from a text dump.
 
 Link results with absolute local paths. A fresh evaluation task must receive only the skill and the case inputs. Keep answer keys outside its workspace; do not read a repository root indiscriminately.
+
+## Native interaction
+
+Follow `interaction.md` for question controls and conversational correction handling. Claude chat and Claude Code may expose different tools; inspect availability rather than assuming parity. Host previews are for reviewing outputs, not a guarantee of direct PDF editing.
 
 ## Shared limits
 

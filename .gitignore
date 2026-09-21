@@ -7,3 +7,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Presentation build scratch
+presentation deck/.build-*/

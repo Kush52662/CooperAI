@@ -1,14 +1,15 @@
-# Implementation and verification — 21 September 2026
+# Historical v1 implementation and verification — 21 September 2026
+
+This records the original `v1.0.0` evaluation, not the current workflow. See [current validation](SKILL_WORKFLOW_VALIDATION.md) for the two-file inputs and conversational tools. Old ZIPs were removed during cleanup; retained output links below are historical evidence.
 
 Implemented a portable `acord-form-filler` skill with Python tools. The active host model interprets documents and selects real ACORD field IDs; Python validates the assignment packet, generates an editable draft, renders it, and checks field readback. There is no separate model API, web app, or account-specific extraction code.
 
 ## Delivered
 
-- [Installable skill ZIP](../dist/acord-form-filler.zip)
-- [Four-case demo inputs ZIP](../dist/demo-inputs.zip), separate from the skill and answer key
+- Runtime and demo ZIP packaging was verified at v1; those stale build artifacts are no longer retained.
 - [Skill instructions](../skills/acord-form-filler/SKILL.md), reference guidance, schema, pinned dependencies, and bundled ACORD 125 (2016/03)
 - [Python tools](../skills/acord-form-filler/scripts/form_tool.py), [tests](../tests/test_form_tool.py), and [reviewer-only evaluator](../tools/evaluate_outputs.py)
-- [Write-up and setup](../README.md) and [onsite demo sequence](DEMO_TALK_TRACK.md)
+- [Current write-up and setup](../README.md)
 
 The source template's 556 field-tree entries contain five structural nodes and **551 actual fields**: 387 text fields and 164 buttons. Technical verification checks all 551 fields, not just populated ones. Original sample inputs and the original template were not edited.
 
