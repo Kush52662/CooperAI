@@ -15,6 +15,10 @@ spec.loader.exec_module(tool)
 NAME = 'F[0].P1[0].NamedInsured_FullName_A[0]'
 QUOTE = 'F[0].P1[0].Policy_Status_QuoteIndicator_A[0]'
 DATE = 'F[0].P1[0].Policy_EffectiveDate_A[0]'
+FORM_ID = 'ACORD 125 (2016/03)'
+FORM = tool.form_definition(FORM_ID)
+TEMPLATE = FORM['template_path']
+OUTPUT = FORM['output_filename']
 
 class FormTests(unittest.TestCase):
     @classmethod
@@ -27,7 +31,7 @@ class FormTests(unittest.TestCase):
         import csv
         with (ROOT/'sample input data/00_clean_walkthrough/ams360_customer_policy_export.csv').open() as h:
             cls.row=next(csv.DictReader(h))
-        cls.request=tool.submission_request(cls.row)
+        cls.request=tool.submission_context_from_csv(cls.row)
 
     @classmethod
     def tearDownClass(cls): cls.tmp.cleanup()
@@ -40,7 +44,7 @@ class FormTests(unittest.TestCase):
         return p
 
     def test_inventory_excludes_structural_nodes(self):
-        _,fields=tool.inventory()
+        _,fields=tool.inventory(TEMPLATE)
         self.assertEqual(len(fields),551)
         self.assertEqual(fields[QUOTE]['states'],['/1','/Off'])
         self.assertIn('named insured',fields[NAME]['label'])
@@ -95,7 +99,7 @@ class FormTests(unittest.TestCase):
         path=Path(self.tmp.name)/'packet.json';tool.save(path,p)
         with patch.object(tool,'render'):
             result=tool.fill(path,self.run_dir)
-        out=Path(result['output'])/'acord-125-draft.pdf'
+        out=Path(result['output'])/OUTPUT
         self.assertTrue(tool.verify(out,p)['technical_pass'])
         r=PdfReader(out)
         self.assertNotIn('/XFA',r.trailer['/Root']['/AcroForm'])
@@ -115,7 +119,7 @@ class FormTests(unittest.TestCase):
         p['assignments'][0].update(field_id=carrier,value=full)
         path=Path(self.tmp.name)/'long.json';tool.save(path,p)
         with patch.object(tool,'render'): result=tool.fill(path,self.run_dir)
-        r=PdfReader(Path(result['output'])/'acord-125-draft.pdf')
+        r=PdfReader(Path(result['output'])/OUTPUT)
         import re
         for ref in r.pages[2]['/Annots']:
             obj=ref.get_object()
@@ -132,18 +136,12 @@ class FormTests(unittest.TestCase):
         self.assertEqual(tool.validate(p,self.run_dir),[])
         self.assertEqual(tool.approved_values(p),{})
 
-    def test_user_revision_retains_history_and_original(self):
-        p=self.packet();path=Path(self.tmp.name)/'resolve-packet.json';tool.save(path,p)
-        result=tool.resolve_value(path,self.run_dir,NAME,'Corrected Example LLC','Use Corrected Example LLC as the applicant.')
-        new=tool.read(result['packet'])
-        self.assertEqual(new['revision'],2)
-        self.assertEqual(new['history'][0]['previous_value'],p['assignments'][0]['value'])
-        self.assertEqual(tool.read(path),p)
-        self.assertEqual(tool.validate(new,self.run_dir),[])
-        with patch.object(tool,'render'):
-            regenerated=tool.fill(result['packet'],self.run_dir)
-        pdf=Path(regenerated['output'])/'acord-125-draft.pdf'
-        self.assertEqual(PdfReader(pdf).get_fields()[NAME]['/V'],'Corrected Example LLC')
-        self.assertTrue(tool.verify(pdf,new)['technical_pass'])
+    def test_registered_form_drives_manifest_and_rendered_pages(self):
+        manifest=tool.read(self.run_dir/'manifest.json')
+        self.assertEqual(manifest['form_id'],FORM_ID)
+        self.assertEqual(manifest['form_guidance'],'references/acord-125.md')
+        self.assertEqual(manifest['output_filename'],OUTPUT)
+        self.assertFalse((self.run_dir/'source-text.txt').exists())
+        self.assertEqual(len(self.base['sources']),2)
 
 if __name__=='__main__': unittest.main()

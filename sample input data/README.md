@@ -1,6 +1,6 @@
 # Sample input data
 
-Source-backed development and demo data for the Cooper AI ACORD 125 form-filler MVP. The package contains four cases: one consistent walkthrough and three realistic challenge cases. It is **not** the 20-case pilot evaluation set proposed in `docs/CALL_BRIEF.md`.
+Source-backed development and demo data for the Cooper AI ACORD 125 form-filler MVP. The package contains three cases for three companies: one consistent walkthrough and two realistic challenge cases. It is **not** the 20-case pilot evaluation set proposed in `docs/CALL_BRIEF.md`.
 
 ## How to use it
 
@@ -9,7 +9,7 @@ Upload only these two files inside one numbered case folder:
 1. `ams360_customer_policy_export.csv` - one-row AMS360-style customer/policy export.
 2. `insurance_document.pdf` - public insurance evidence for the same account.
 
-The CSV contains `Requested Form`, `Transaction Status`, `Proposed Effective Date`, `Proposed Expiration Date`, and `Requested Lines of Business` (semicolon-separated). Legacy `submission_request.json` remains supported by the tool but is not included in the sample folders. If supplied together, the submission values must agree.
+The CSV contains `Requested Form`, `Transaction Status`, `Proposed Effective Date`, `Proposed Expiration Date`, and `Requested Lines of Business` (semicolon-separated). The workflow accepts only this CSV and the insurance PDF.
 
 Use `output_template/acord_125_blank_fillable.pdf` as the output form. Never upload `_evaluation/`; it contains reviewer-only expected answers.
 
@@ -20,7 +20,6 @@ The proposed application period is **10/01/2026-10/01/2027**. Historical dates i
 | Folder | Purpose | Expected behavior |
 |---|---|---|
 | `00_clean_walkthrough` | Declaration-only, internally consistent first demo. | Fill supported applicant and prior-coverage values without conflicts. |
-| `01_lawn_and_order_mowing` | Certificate, declarations, and a problematic PDF text layer. | Flag the 09/20 versus 12/20 policy-period conflict and the rendered-page/text-layer discrepancy. |
 | `02_watson_contracting` | Same entity with conflicting street addresses and policy-number representations. | Preserve both sources and require human review. Treat $11,388 as umbrella-specific. |
 | `03_tarheel_paving` | Sparse certificate plus legal-name variation. | Flag the company-name difference and leave unsupported fields blank. |
 
@@ -28,17 +27,17 @@ The proposed application period is **10/01/2026-10/01/2027**. Historical dates i
 
 The PDFs and account facts come from public government records. The CSVs are normalized, source-backed AMS360-style exports; they are not exports from a live AMS360 tenant and are not AI-generated businesses. Their 27 headers are a practical subset of Vertafore's documented **Customer Policy Information** export fields. Unsupported values remain blank. FEINs and signatures are excluded.
 
-The three challenge PDFs include ACORD 25 certificates as supporting insurance documents. That is deliberate: ACORD 25 is an input artifact containing coverage evidence, while ACORD 125 is the blank output application. The clean walkthrough excludes the certificate and uses declaration pages only.
+The two challenge PDFs include ACORD 25 certificates as supporting insurance documents. That is deliberate: ACORD 25 is an input artifact containing coverage evidence, while ACORD 125 is the blank output application. The clean walkthrough excludes the certificate and uses declaration pages only.
 
 ## Provenance
 
 Sources last verified **2026-09-21**.
 
-### 00 and 01 - Lawn & Order Mowing LLC
+### 00 - Lawn & Order Mowing LLC
 
 - Insurance source: NCDOT contract `DN12196005`: <https://connect.ncdot.gov/letting/Division%2014%20Letting/09%2009%202025/DN12196005%20CONTRACT.pdf>
 - Account source: TDOT prequalified contractor listing, vendor `1000003093`: <https://www.tn.gov/content/dam/tn/tdot/construction/prequal.pdf>
-- `00` uses source pages 54, 55, and 67. `01` uses source pages 53-56 and 67.
+- The case uses source pages 54, 55, and 67.
 
 ### 02 - Watson Contracting Inc
 
@@ -56,4 +55,4 @@ Sources last verified **2026-09-21**.
 
 ## Evaluation boundary
 
-The exact supported values, page references, conflicts, and required blanks are documented in `_evaluation/expected_results.json`. Four cases are enough for development and a live demo. A credible pilot claim still requires the planned 20-case evaluation with broader document quality, business types, and failure modes.
+The exact supported values, page references, conflicts, and required blanks are documented in `_evaluation/expected_results.json`. These three cases support development and a live demo. A credible pilot claim still requires the planned 20-case evaluation with broader document quality, business types, and failure modes.

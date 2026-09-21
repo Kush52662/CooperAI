@@ -5,7 +5,7 @@ Support the bundled 2016/03 edition only. Its 556 field-tree entries include fiv
 ## Source and role distinctions
 
 - Read the insured's own data into applicant fields. A certificate's producer/contact/phone is the historical issuing agency, not automatically the agency preparing the new application. A certificate holder is not the applicant.
-- Use the CSV submission columns (or legacy submission_request.json) for proposed effective/expiration dates, transaction status, and requested lines. Existing-policy carriers, policy numbers, premiums, and dates belong in appropriate prior-coverage fields, not the new proposed policy block.
+- Use the CSV submission columns for proposed effective/expiration dates, transaction status, and requested lines. Existing-policy carriers, policy numbers, premiums, and dates belong in appropriate prior-coverage fields, not the new proposed policy block.
 - Prior GL, auto, property, and other lines have separate columns. Keep values tied to their exact line and policy period. Umbrella may use the prior-coverage Other column with its line label; it is not GL. Do not sum premiums across unrelated coverages.
 - Do not assume an existing limit is a requested limit, or check every coverage appearing on a certificate as requested coverage.
 - Named-insured mailing address is not automatically a premises address. A location schedule can independently support premises. Do not infer occupancy, ownership, revenue, employee count, years in business, or building details from an address or business name.
@@ -28,4 +28,4 @@ Read the actual field tooltip. For example, a proposed policy number and a prior
 
 Useful categories to check: applicant identity and address, contact, explicitly supported legal entity, business description, documented premises, requested transaction/lines/period, and prior coverages. Unsupported sections stay blank and are summarized in review issues. Do not force data into a field merely to increase coverage.
 
-Inspect image and embedded-text evidence together. If a PDF overlay displays one value while extracted text includes older hidden values, flag the discrepancy and preserve page/channel provenance. A readable text layer is not proof it represents the visible page.
+Extract PDF facts from rendered page images. Preserve page provenance for each value and flag visible conflicts with the CSV.

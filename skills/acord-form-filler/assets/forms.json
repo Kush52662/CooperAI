@@ -1,0 +1,12 @@
+{
+  "ACORD 125 (2016/03)": {
+    "edition": "2016/03",
+    "template": "assets/acord_125.pdf",
+    "guidance": "references/acord-125.md",
+    "output_filename": "acord-125-draft.pdf",
+    "proposed_date_fields": {
+      "proposed_effective_date": "Policy_EffectiveDate_",
+      "proposed_expiration_date": "Policy_ExpirationDate_"
+    }
+  }
+}

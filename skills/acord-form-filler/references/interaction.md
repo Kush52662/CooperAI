@@ -17,7 +17,7 @@ Deliver the verified draft before starting the clarification loop. Report the ac
 
 Ask one decision at a time by default, prioritizing substantive conflicts and missing information that changes the application. Group tightly related fields only when the answer can unambiguously resolve each one. Do not ask the user to reconfirm supported facts or every unused template field.
 
-For a conflict, state the field and the conflicting evidence. Choices must show the exact value plus source and page/CSV column; include “Leave unresolved” if the tool supports enough options. Allow a custom answer via the tool's native free-text path. If required option limits cannot represent the evidence fairly, use a plain chat question instead. Show the relevant source image or crop separately when the distinction is visual; a quotation from embedded text is not proof of the visible page.
+For a conflict, state the field and the conflicting evidence. Choices must show the exact value plus source and page/CSV column; include “Leave unresolved” if the tool supports enough options. Allow a custom answer via the tool's native free-text path. If required option limits cannot represent the evidence fairly, use a plain chat question instead. Show the relevant rendered source page or crop when the distinction is visual.
 
 Do not recommend one disputed factual value merely because a question tool requires a recommended or preselected option. Where that rule applies, recommend leaving it unresolved pending confirmation. A default selection, empty response, dismissal, timeout, or elapsed time is not confirmation. Preserve the blank value and issue until the user actually answers.
 

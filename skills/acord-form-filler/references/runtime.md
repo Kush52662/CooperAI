@@ -6,7 +6,7 @@ Install the skill ZIP using Claude's custom-skill installation UI; enable code e
 
 Locate the installed SKILL.md and uploaded files using the environment's file tools. Do not hardcode /mnt paths. Run the doctor command using the available Python. If dependencies are missing and package installation is available, run `python -m pip install -r "$SKILL_ROOT/requirements.txt"`. If installation is unavailable, report the exact missing dependency; do not claim the skill ran successfully. A fresh Claude-chat install must be tested before the onsite; local tool tests do not establish Claude-chat compatibility.
 
-Use native PDF vision plus the tool's rendered pages and embedded text. Open generated page images with the host's image-viewing tool. Provide output links using that host's artifact/file interface.
+Use the tool's rendered page images as the PDF evidence presented to multimodal vision. Open every generated page image with the host's image-viewing tool. Provide output links using that host's artifact/file interface.
 
 ## Codex
 

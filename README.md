@@ -16,7 +16,7 @@ Inspect the source documents and all generated PDF pages.
 Return the draft PDF, source references, and unresolved questions.
 ```
 
-The CSV contains requested form, transaction status, proposed effective/expiration dates, and requested lines of business. All four sample CSVs include these columns. Legacy submission-request JSON is optional; conflicting CSV/JSON submission values are rejected.
+The CSV contains requested form, transaction status, proposed effective/expiration dates, and requested lines of business. All three sample CSVs include these columns. The user-facing workflow accepts only the CSV and insurance PDF.
 
 After receiving the draft, answer the native question controls or reply naturally: “For this test, change the applicant phone to (202) 555-0147.” Explicit corrections create a new revision; earlier PDFs and source alternatives remain preserved. Skipped questions stay unresolved. Host previews are not direct PDF editors.
 
@@ -35,19 +35,18 @@ For Claude, see [runtime instructions](skills/acord-form-filler/references/runti
 
 ## Design and scope
 
-- **AI interpretation:** inspect source pages and text, distinguish applicant/producer/carrier roles, map evidence to actual template fields, and preserve disagreements.
+- **AI interpretation:** inspect every rendered source page, distinguish applicant/producer/carrier roles, map evidence to actual template fields, and preserve disagreements.
 - **Deterministic execution:** enforce source hashes, field types, exact checkbox states, dates, evidence locations, and revision history; verify written PDF values.
 - **Conversational review:** native Q&A where available, plain chat otherwise. Review current state, stage a batch of corrections, apply one revision, and inspect its output.
-- **Separate visual checks:** readback does not prove semantic accuracy or correct appearance. Inspect all four output pages before recording visual approval.
+- **Separate visual checks:** readback does not prove semantic accuracy or correct appearance. Inspect every output page before recording visual approval.
 
-Supported: one account, the bundled ACORD 125 (2016/03), text-based insurance PDFs, two-file inputs, corrections/additions/clearing, and focused form previews. Unsupported: arbitrary templates, OCR/handwriting, non-ASCII output, signatures, AMS360 write-back, carrier submission, and deployment. Other forms need edition-specific guidance, templates, and evaluation cases.
+Supported: one account, the registered ACORD 125 (2016/03), legible insurance PDFs, two-file inputs, corrections/additions/clearing, and focused form previews. Unsupported: arbitrary templates, handwriting, non-ASCII output, signatures, AMS360 write-back, carrier submission, and deployment. The shared engine selects form-specific templates, guidance, output names, and date-field markers through `assets/forms.json`. Another form still requires its own asset, guidance, registry entry, and evaluation cases before support can be claimed.
 
-The four public-record-derived cases are development examples, not a 20-case pilot; two share the same account. The [discovery brief](docs/CALL_BRIEF.md) records assumed workload and timing targets, not measured savings.
+The three public-record-derived company cases are development examples, not a 20-case pilot. The [discovery brief](docs/CALL_BRIEF.md) records assumed workload and timing targets, not measured savings.
 
 ## Validation and references
 
-- [Current validation](docs/SKILL_WORKFLOW_VALIDATION.md): 30 tests; four development walkthroughs; native-host testing limits.
-- [Historical v1 results](docs/IMPLEMENTATION_RESULTS.md): earlier independent walkthrough and known limitations.
+- [Current validation](docs/SKILL_WORKFLOW_VALIDATION.md): 30 tests; three development cases; native-host testing limits.
 - [Skill entrypoint](skills/acord-form-filler/SKILL.md) and [tool contracts](skills/acord-form-filler/references/packet-format.md).
 - [Sample inputs](sample%20input%20data/README.md).
 

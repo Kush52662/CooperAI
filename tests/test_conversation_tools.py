@@ -1,6 +1,5 @@
 """Behavior tests using the actual template; no model evaluation claims."""
 import copy
-import csv
 import importlib.util
 import shutil
 import tempfile
@@ -15,6 +14,10 @@ t = importlib.util.module_from_spec(spec); spec.loader.exec_module(t)
 NAME = 'F[0].P1[0].NamedInsured_FullName_A[0]'
 PHONE = 'F[0].P1[0].NamedInsured_Primary_PhoneNumber_A[0]'
 DATE = 'F[0].P1[0].Policy_EffectiveDate_A[0]'
+FORM_ID = 'ACORD 125 (2016/03)'
+FORM = t.form_definition(FORM_ID)
+TEMPLATE = FORM['template_path']
+OUTPUT = FORM['output_filename']
 
 class ConversationTests(unittest.TestCase):
     def setUp(self):
@@ -44,24 +47,17 @@ class ConversationTests(unittest.TestCase):
         p['assignments'].append({'field_id':DATE,'semantic':'proposal.start','value':'10/01/2026','status':'supported','evidence':[{'file':'ams360_customer_policy_export.csv','column':'Proposed Effective Date','quote':'10/01/2026'}],'alternatives':[],'note':''})
         self.assertEqual(t.validate(p,self.run),[])
 
-    def test_legacy_and_matching_dual_inputs(self):
-        request=t.read(self.run/'manifest.json')['request']
-        t.save(self.source/'submission_request.json',request)
-        with patch.object(t,'render'): t.prepare(self.source,self.home/'dual')
-        csv_path=self.source/'ams360_customer_policy_export.csv'
-        with csv_path.open() as h: row=next(csv.DictReader(h))
-        row={k:v for k,v in row.items() if k not in t.REQUEST_COLUMNS.values()}
-        with csv_path.open('w',newline='') as h:
-            w=csv.DictWriter(h,fieldnames=list(row));w.writeheader();w.writerow(row)
-        with patch.object(t,'render'): t.prepare(self.source,self.home/'legacy')
-        self.assertEqual(len(t.read(self.home/'legacy/packet.json')['sources']),3)
-
-    def test_conflicting_and_partial_submission_rejected(self):
-        request=copy.deepcopy(t.read(self.run/'manifest.json')['request'])
-        request['proposed_effective_date']='10/02/2026';t.save(self.source/'submission_request.json',request)
-        with self.assertRaisesRegex(ValueError,'Conflicting'):t.prepare(self.source,self.home/'bad')
-        with self.assertRaisesRegex(ValueError,'Missing submission'):t.submission_request({'Requested Form':'ACORD 125 (2016/03)'},request)
+    def test_additional_json_input_rejected(self):
+        t.save(self.source/'submission_request.json',{'unsupported':True})
+        with self.assertRaisesRegex(ValueError,'exactly ams360_customer_policy_export.csv and insurance_document.pdf'):
+            t.prepare(self.source,self.home/'bad')
         self.assertFalse((self.home/'bad').exists())
+
+    def test_missing_submission_columns_rejected(self):
+        with self.assertRaisesRegex(ValueError,'Missing submission'):
+            t.submission_context_from_csv({'Requested Form':FORM_ID})
+        with self.assertRaisesRegex(ValueError,'Unsupported requested form'):
+            t.form_definition('ACORD 126 (unregistered test)')
 
     def test_stage_does_not_mutate_and_batch_has_one_revision(self):
         before=self.packet.read_bytes()
@@ -72,7 +68,7 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(new['revision'],2);self.assertEqual(len(new['history']),2)
         self.assertEqual(self.packet.read_bytes(),before)
         with patch.object(t,'render'): output=t.fill(result['packet'],self.run)
-        self.assertTrue(t.verify(Path(output['output'])/'acord-125-draft.pdf',new)['technical_pass'])
+        self.assertTrue(t.verify(Path(output['output'])/OUTPUT,new)['technical_pass'])
 
     def test_invalid_batch_is_all_or_nothing(self):
         before=self.packet.read_bytes()
@@ -101,7 +97,7 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(new['assignments'][1]['status'],'missing')
         self.assertEqual(new['assignments'][1]['alternatives'],p['assignments'][1]['alternatives'])
         with patch.object(t,'render'): result=t.fill(path,self.run)
-        self.assertTrue(t.verify(Path(result['output'])/'acord-125-draft.pdf',new)['technical_pass'])
+        self.assertTrue(t.verify(Path(result['output'])/OUTPUT,new)['technical_pass'])
 
     def test_user_evidence_must_match_field_history(self):
         p=t.read(self.packet);p['assignments'][0].update(status='user_confirmed',evidence=[{'file':'user','quote':'yes'}])
@@ -121,7 +117,7 @@ class ConversationTests(unittest.TestCase):
         stage=self.stage([self.change(value=None)])
         path=t.apply_corrections(self.packet,self.run,stage)['packet']
         with patch.object(t,'render'):result=t.fill(path,self.run)
-        self.assertEqual(t.verify(Path(result['output'])/'acord-125-draft.pdf',t.read(path))['filled_fields'],0)
+        self.assertEqual(t.verify(Path(result['output'])/OUTPUT,t.read(path))['filled_fields'],0)
 
     def test_apply_revalidates_tampered_batch(self):
         stage=self.stage([self.change()]);data=t.read(stage)
@@ -137,12 +133,12 @@ class ConversationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'wrong-run'):t.apply_corrections(other/'packet.json',other,stage)
 
     def test_crop_geometry_and_pixels_match_rendered_template(self):
-        result=t.field_preview(NAME,t.TEMPLATE,self.home/'crop')
+        result=t.field_preview(NAME,TEMPLATE,self.home/'crop',FORM_ID)
         import pypdfium2 as pdfium
         info=result['previews'][0]
         with Image.open(info['path']) as crop:
             box=info['pixel_box'];self.assertEqual(crop.size,(box[2]-box[0],box[3]-box[1]))
-            doc=pdfium.PdfDocument(str(t.TEMPLATE));doc.init_forms();page=doc[info['page']-1];bitmap=page.render(scale=2,may_draw_forms=True)
+            doc=pdfium.PdfDocument(str(TEMPLATE));doc.init_forms();page=doc[info['page']-1];bitmap=page.render(scale=2,may_draw_forms=True)
             self.assertEqual(crop.tobytes(),bitmap.to_pil().crop(box).tobytes())
             bitmap.close();page.close();doc.close()
         f=info['field_rect'];c=info['crop_rect']

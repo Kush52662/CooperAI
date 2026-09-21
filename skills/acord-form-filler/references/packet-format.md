@@ -1,6 +1,6 @@
 # Assignment packet
 
-`prepare` creates packet.json with hashes and source filenames. Keep those values unchanged. `packet.schema.json` is the machine-readable contract. It is metadata, not a source of account answers.
+`prepare` creates packet.json with the registered form ID, hashes, and source filenames. Keep those values unchanged. `packet.schema.json` is the machine-readable contract. It is metadata, not a source of account answers.
 
 Each assignment has:
 
@@ -8,7 +8,7 @@ Each assignment has:
 - `field_id`: full actual ID returned by template inspection.
 - `value`: string for supported/user-confirmed fields; null for missing/conflicting fields. Checkbox values must be exact export states such as `/1`, never a guessed boolean.
 - `status`: `supported`, `missing`, `conflict`, or `user_confirmed`.
-- `evidence`: source references with a verbatim `quote`. PDF references require `file`, 1-based `page`, and preferably `channel` (`rendered` or `text`). CSV references require a `column` and exact cell quote. Request references require a `key` and exact value quote; serialize list values as JSON.
+- `evidence`: source references with a verbatim `quote`. PDF references require `file`, 1-based `page`, and `channel: rendered`. CSV references require a `column` and exact cell quote.
 - `alternatives`: list of `{value, evidence}` objects; at least two for conflicts. Preserve historical alternatives after user resolution.
 - `note`: concise interpretation or normalization explanation.
 
@@ -26,9 +26,9 @@ Illustrative shape only, with deliberately fictional values:
 }
 ```
 
-`issues` records unresolved categories or document problems as `{field, message, evidence}`. Use this for missing data without a proposed value, unsupported requested sections, and image/text discrepancies. An empty evidence list is appropriate for absence of information. Issues are not silently resolved by generating a PDF.
+`issues` records unresolved categories or document problems as `{field, message, evidence}`. Use this for missing data without a proposed value, unsupported requested sections, and source discrepancies. An empty evidence list is appropriate for absence of information. Issues are not silently resolved by generating a PDF.
 
-`history` is initially empty. `resolve` records each user correction with time, field ID, previous value/status, and the exact user statement. User confirmation is an agent-recorded conversation fact, not cryptographic authorization. Never write history from reviewer answer keys.
+`history` is initially empty. Applying staged corrections records each user correction with time, field ID, previous value/status, and the exact user statement. User confirmation is an agent-recorded conversation fact, not cryptographic authorization. Never write history from reviewer answer keys.
 
 Keep the current packet separate from the immutable copy in each generated revision directory. Increment revision for any manual packet correction. `fill` refuses to overwrite an existing revision.
 
@@ -39,13 +39,12 @@ Prefix every command with `python "$SKILL_ROOT/scripts/form_tool.py"`:
 ```text
 doctor
 prepare --input-dir INPUT --run-dir NEW_RUN
-inspect --match "NamedInsured"
-inspect --match "PriorCoverage"
+inspect --form "FORM_ID" --match "NamedInsured"
+inspect --form "FORM_ID" --match "PriorCoverage"
 validate --packet RUN/packet.json --run-dir RUN
 fill --packet RUN/packet.json --run-dir RUN
-verify --pdf REVISION/acord-125-draft.pdf --packet REVISION/packet.json
+verify --pdf REVISION/REGISTRY_OUTPUT_FILENAME --packet REVISION/packet.json
 render --pdf INPUT.pdf --out PAGE_DIRECTORY
-resolve --packet PACKET --run-dir RUN --field FIELD_ID --value VALUE --statement USER_STATEMENT
 record-visual-review --revision-dir REVISION --result pass --note OBSERVATIONS
 ```
 
@@ -55,7 +54,7 @@ Use argument arrays or safe shell quoting. Do not interpolate document text into
 
 ## Two-file submission inputs
 
-CSV submission columns are the original evidence. Cite their exact column and cell value, including for proposed dates. `manifest.json.request` is normalized metadata, not an independently citable source. Legacy JSON remains accepted; matching CSV/JSON may coexist, but contradictory values are rejected. Sources contain two or three original files.
+CSV submission columns are the original evidence. Cite their exact column and cell value, including for proposed dates. `manifest.json.request` is normalized metadata, not an independently citable source. Each run contains exactly two original source files: the CSV and insurance PDF.
 
 ## Conversational tools
 
@@ -63,7 +62,7 @@ CSV submission columns are the original evidence. Cite their exact column and ce
 review --packet PACKET [--before PREVIOUS_PACKET] [--format json|markdown]
 stage-corrections --packet PACKET --run-dir RUN --changes CHANGES_JSON --out NEW_STAGE_JSON
 apply-corrections --packet PACKET --run-dir RUN --stage STAGE_JSON
-field-preview --field FIELD_ID [--pdf TEMPLATE_OR_DRAFT] --out NEW_FOLDER
+field-preview --form "FORM_ID" --field FIELD_ID [--pdf TEMPLATE_OR_DRAFT] --out NEW_FOLDER
 ```
 
 The agent writes `CHANGES_JSON` as a nonempty array, one entry per field:

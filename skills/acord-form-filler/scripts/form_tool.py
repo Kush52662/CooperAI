@@ -16,7 +16,7 @@ from pypdf import PdfReader, PdfWriter
 from pypdf.generic import NameObject, TextStringObject
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / 'assets/acord_125.pdf'
+FORM_REGISTRY = ROOT / 'assets/forms.json'
 
 
 REQUEST_COLUMNS = {
@@ -28,24 +28,13 @@ REQUEST_COLUMNS = {
 }
 
 
-def submission_request(row, legacy=None):
-    present = [column for column in REQUEST_COLUMNS.values() if column in row]
-    if present:
-        missing = [column for column in REQUEST_COLUMNS.values() if not row.get(column, '').strip()]
-        if missing:
-            raise ValueError('Missing submission columns/values: ' + ', '.join(missing))
-        request = {key: row[column].strip() for key, column in REQUEST_COLUMNS.items()}
-        request['requested_lines_of_business'] = [v.strip() for v in request['requested_lines_of_business'].split(';') if v.strip()]
-        if legacy is not None:
-            for key, value in request.items():
-                other = legacy.get(key)
-                equal = sorted(value) == sorted(other) if isinstance(value, list) and isinstance(other, list) else value == other
-                if not equal:
-                    raise ValueError('Conflicting CSV and submission request: ' + key)
-        return request
-    if legacy is None:
-        raise ValueError('Supply submission columns in CSV or a legacy submission_request.json.')
-    return legacy
+def submission_context_from_csv(row):
+    missing = [column for column in REQUEST_COLUMNS.values() if not row.get(column, '').strip()]
+    if missing:
+        raise ValueError('Missing submission columns/values: ' + ', '.join(missing))
+    request = {key: row[column].strip() for key, column in REQUEST_COLUMNS.items()}
+    request['requested_lines_of_business'] = [v.strip() for v in request['requested_lines_of_business'].split(';') if v.strip()]
+    return request
 
 
 def save_new(path, value):
@@ -63,6 +52,25 @@ def digest(path):
 
 def read(path):
     return json.loads(Path(path).read_text())
+
+
+def form_definition(form_id):
+    registry = read(FORM_REGISTRY)
+    if form_id not in registry:
+        raise ValueError(f'Unsupported requested form: {form_id}. Registered forms: {", ".join(registry)}')
+    form = dict(registry[form_id])
+    required = {'edition', 'template', 'guidance', 'output_filename', 'proposed_date_fields'}
+    if set(form) != required:
+        raise ValueError(f'Invalid registry entry for {form_id}.')
+    for key in ('template', 'guidance'):
+        path = (ROOT / form[key]).resolve()
+        if ROOT not in path.parents or not path.is_file():
+            raise ValueError(f'Registered {key} is missing or outside the skill: {form[key]}')
+        form[key + '_path'] = path
+    if set(form['proposed_date_fields']) != {'proposed_effective_date', 'proposed_expiration_date'}:
+        raise ValueError(f'Invalid proposed-date field mapping for {form_id}.')
+    form['form_id'] = form_id
+    return form
 
 
 def save(path, value):
@@ -92,7 +100,7 @@ def field_name(obj):
     return '.'.join(reversed(parts))
 
 
-def inventory(path=TEMPLATE):
+def inventory(path):
     reader = PdfReader(path)
     if reader.is_encrypted and not reader.decrypt(''):
         raise ValueError('Password-protected PDFs are outside this MVP.')
@@ -140,20 +148,18 @@ def render(pdf, folder):
 
 def prepare(input_dir, run_dir):
     input_dir, run_dir = Path(input_dir).resolve(), Path(run_dir).resolve()
-    names = ['ams360_customer_policy_export.csv', 'insurance_document.pdf', 'submission_request.json']
-    paths = [input_dir / n for n in names[:2]]
-    if not all(p.is_file() for p in paths):
-        raise ValueError('Provide the account CSV and insurance PDF.')
-    legacy_path = input_dir / names[2]
-    if legacy_path.is_file(): paths.append(legacy_path)
+    names = ['ams360_customer_policy_export.csv', 'insurance_document.pdf']
+    paths = [input_dir / name for name in names]
+    supplied = {path.name for path in input_dir.iterdir() if path.is_file() and not path.name.startswith('.')}
+    if supplied != set(names):
+        raise ValueError('Provide exactly ams360_customer_policy_export.csv and insurance_document.pdf.')
     with paths[0].open(encoding='utf-8-sig', newline='') as handle:
         table = csv.DictReader(handle)
         rows = list(table)
         if len(rows) != 1 or len(set(table.fieldnames or [])) != len(table.fieldnames or []) or any(k is None or v is None for row in rows for k, v in row.items()):
             raise ValueError('CSV must contain unique headers and exactly one well-formed account row.')
-    request = submission_request(rows[0], read(legacy_path) if legacy_path.is_file() else None)
-    if request.get('output_form') != 'ACORD 125 (2016/03)':
-        raise ValueError('Only ACORD 125 (2016/03) is supported.')
+    request = submission_context_from_csv(rows[0])
+    form = form_definition(request['output_form'])
     start = datetime.strptime(request['proposed_effective_date'], '%m/%d/%Y')
     end = datetime.strptime(request['proposed_expiration_date'], '%m/%d/%Y')
     if end <= start:
@@ -161,21 +167,24 @@ def prepare(input_dir, run_dir):
     if not isinstance(request.get('requested_lines_of_business'), list) or not request['requested_lines_of_business']:
         raise ValueError('Supply requested lines of business.')
     source = PdfReader(paths[1])
-    if source.is_encrypted or any(not (p.extract_text() or '').strip() for p in source.pages):
-        raise ValueError('Encrypted or scan-only pages need an out-of-scope ingestion path.')
+    if source.is_encrypted:
+        raise ValueError('Encrypted PDFs are outside this MVP.')
     run_dir.mkdir(parents=True, exist_ok=False)
     sources = [{'file': p.name, 'path': str(p), 'sha256': digest(p)} for p in paths]
-    manifest = {'started_at': now(), 'template_sha256': digest(TEMPLATE), 'sources': sources, 'request': request}
+    manifest = {'started_at': now(), 'form_id': form['form_id'], 'form_edition': form['edition'],
+                'form_guidance': form['guidance'], 'output_filename': form['output_filename'],
+                'template_sha256': digest(form['template_path']), 'sources': sources, 'request': request}
     save(run_dir / 'manifest.json', manifest)
-    (run_dir / 'source-text.txt').write_text('\n\n'.join(f'PAGE {i+1}\n{p.extract_text()}' for i, p in enumerate(source.pages)))
     render(paths[1], run_dir / 'source-pages')
-    _, fields = inventory()
+    _, fields = inventory(form['template_path'])
     save(run_dir / 'fields.json', fields)
-    save(run_dir / 'packet.json', {'schema_version': '1.0', 'template_sha256': digest(TEMPLATE),
+    save(run_dir / 'packet.json', {'schema_version': '1.0', 'form_id': form['form_id'],
+         'template_sha256': digest(form['template_path']),
          'sources': [{'file': p['file'], 'sha256': p['sha256']} for p in sources],
          'revision': 1, 'assignments': [], 'issues': [], 'history': []})
-    return {'run_dir': str(run_dir), 'fields': len(fields), 'source_pages': len(source.pages),
-            'next': 'Read raw inputs, source-pages, and source-text; author packet.json using skill guidance.'}
+    return {'run_dir': str(run_dir), 'form_id': form['form_id'], 'guidance': form['guidance'],
+            'fields': len(fields), 'source_pages': len(source.pages),
+            'next': 'Read the CSV and inspect every rendered PDF page; author packet.json using skill guidance.'}
 
 
 def validate(packet, run_dir):
@@ -185,8 +194,11 @@ def validate(packet, run_dir):
     if errors:
         return errors
     manifest = read(run_dir / 'manifest.json')
-    _, fields = inventory()
-    if packet['template_sha256'] != digest(TEMPLATE) or manifest['template_sha256'] != digest(TEMPLATE):
+    form = form_definition(packet['form_id'])
+    _, fields = inventory(form['template_path'])
+    if manifest.get('form_id') != packet['form_id']:
+        errors.append('Packet form does not match the prepared run.')
+    if packet['template_sha256'] != digest(form['template_path']) or manifest['template_sha256'] != digest(form['template_path']):
         errors.append('Template hash mismatch.')
     expected_sources = [{'file': s['file'], 'sha256': s['sha256']} for s in manifest['sources']]
     if packet['sources'] != expected_sources:
@@ -200,7 +212,7 @@ def validate(packet, run_dir):
     pdf = PdfReader(files['insurance_document.pdf'])
     with files['ams360_customer_policy_export.csv'].open(encoding='utf-8-sig', newline='') as h:
         csv_row = next(csv.DictReader(h))
-    request = submission_request(csv_row, read(files['submission_request.json']) if 'submission_request.json' in files else None)
+    request = submission_context_from_csv(csv_row)
     seen, semantics = set(), set()
     def check_evidence(ev):
         file = ev['file']
@@ -212,19 +224,12 @@ def validate(packet, run_dir):
         elif file.endswith('.pdf'):
             if not isinstance(ev.get('page'), int) or not 1 <= ev['page'] <= len(pdf.pages):
                 errors.append('PDF evidence requires a valid 1-based page.')
-            # A quote is not checked by substring: the rendered page may differ from embedded text.
+            # The multimodal agent supplies the quotation from the rendered page.
         elif file.endswith('.csv'):
             if ev.get('column') not in csv_row or not csv_row.get(ev.get('column'), '').strip():
                 errors.append('CSV evidence must reference a nonempty column.')
             elif ev['quote'] != csv_row[ev['column']]:
                 errors.append('CSV evidence quote must equal the source cell.')
-        elif file.endswith('.json'):
-            if ev.get('key') not in request:
-                errors.append('Request evidence requires an existing key.')
-            else:
-                value = request[ev['key']]
-                if ev['quote'] != (json.dumps(value) if isinstance(value, (list, dict)) else str(value)):
-                    errors.append('Request evidence quote must equal the source value (JSON for lists).')
     for a in packet['assignments']:
         fid, value, status = a['field_id'], a['value'], a['status']
         if fid in seen or a['semantic'] in semantics:
@@ -266,9 +271,8 @@ def validate(packet, run_dir):
                 except ValueError: errors.append(f'Invalid MM/DD/YYYY date: {fid}')
             if 'Enter amount:' in meta['label'] and not re.fullmatch(r'\$?\d[\d,]*(\.\d{1,2})?', value):
                 errors.append(f'Invalid amount: {fid}')
-        date_key = ('proposed_effective_date' if 'Policy_EffectiveDate_' in fid else
-                    'proposed_expiration_date' if 'Policy_ExpirationDate_' in fid else None)
-        if date_key and (value != request[date_key] or not any((e['file'] == 'submission_request.json' and e.get('key') == date_key) or (e['file'] == 'ams360_customer_policy_export.csv' and e.get('column') == REQUEST_COLUMNS[date_key]) for e in a['evidence'])):
+        date_key = next((key for key, marker in form['proposed_date_fields'].items() if marker in fid), None)
+        if date_key and (value != request[date_key] or not any(e['file'] == 'ams360_customer_policy_export.csv' and e.get('column') == REQUEST_COLUMNS[date_key] for e in a['evidence'])):
             errors.append(f'Proposed dates must match submission inputs: {fid}')
     for issue in packet['issues']:
         for ev in issue['evidence']:
@@ -281,7 +285,8 @@ def approved_values(packet):
 
 
 def verify(pdf_path, packet):
-    original, fields = inventory()
+    form = form_definition(packet['form_id'])
+    original, fields = inventory(form['template_path'])
     result = PdfReader(pdf_path)
     actual = result.get_fields() or {}
     expected = approved_values(packet)
@@ -322,15 +327,16 @@ def verify(pdf_path, packet):
 def fill(packet_path, run_dir):
     run_dir, packet_path = Path(run_dir), Path(packet_path)
     packet = read(packet_path)
+    form = form_definition(packet['form_id'])
     errors = validate(packet, run_dir)
     if errors: raise ValueError('\n'.join(errors))
     if not packet['assignments']: raise ValueError('No assignments to render.')
     out = run_dir / f'revision-{packet["revision"]:03d}'
     out.mkdir(exist_ok=False)
     writer = PdfWriter()
-    writer.clone_document_from_reader(PdfReader(TEMPLATE))
+    writer.clone_document_from_reader(PdfReader(form['template_path']))
     writer._root_object['/AcroForm'].pop('/XFA', None)
-    _, field_meta = inventory()
+    _, field_meta = inventory(form['template_path'])
     values = {k: ((v, '/Helv', 0) if field_meta[k]['type'] == '/Tx' else v)
               for k, v in approved_values(packet).items()}
     # pypdf 6.10 ignores a tuple size of zero when a widget has a fixed /DA.
@@ -341,11 +347,12 @@ def fill(packet_path, run_dir):
             if field_name(widget) in values and inherited(widget, '/FT') == '/Tx':
                 widget[NameObject('/DA')] = TextStringObject('/Helv 0 Tf 0 g')
     writer.update_page_form_field_values(None, values, auto_regenerate=False)
-    pdf = out / 'acord-125-draft.pdf'
+    pdf = out / form['output_filename']
     with pdf.open('wb') as h: writer.write(h)
     save(out / 'packet.json', packet)
     report = verify(pdf, packet)
-    report.update({'generated_at': now(), 'pdf_sha256': digest(pdf), 'packet_sha256': digest(out / 'packet.json')})
+    report.update({'generated_at': now(), 'output_filename': form['output_filename'],
+                   'pdf_sha256': digest(pdf), 'packet_sha256': digest(out / 'packet.json')})
     save(out / 'verification.json', report)
     if not report['technical_pass']: raise ValueError('PDF readback failed; do not deliver. See verification.json.')
     render(pdf, out / 'pages')
@@ -368,24 +375,6 @@ def fill(packet_path, run_dir):
     return {'output': str(out), 'technical_pass': True, 'visual_review': 'pending'}
 
 
-def resolve_value(packet_path, run_dir, fid, value, statement):
-    packet_path = Path(packet_path)
-    packet = read(packet_path)
-    match = next((a for a in packet['assignments'] if a['field_id'] == fid), None)
-    if not match: raise ValueError('Resolution requires an existing assignment.')
-    packet['history'].append({'at': now(), 'field_id': fid, 'previous_value': match['value'],
-                              'previous_status': match['status'], 'statement': statement})
-    match.update(value=value, status='user_confirmed')
-    match['evidence'].append({'file': 'user', 'quote': statement})
-    packet['revision'] += 1
-    errors = validate(packet, run_dir)
-    if errors: raise ValueError('\n'.join(errors))
-    next_path = packet_path.with_name(f'packet-r{packet["revision"]:03d}.json')
-    if next_path.exists(): raise ValueError('Revision packet already exists.')
-    save(next_path, packet)
-    return {'packet': str(next_path), 'note': 'Historical alternatives preserved. Reconcile related issues before filling.'}
-
-
 def revision_head(run_dir):
     """Saved packets are the revision ledger; no separate database or pointer."""
     run = Path(run_dir)
@@ -406,7 +395,8 @@ def corrected_packet(base, changes, run_dir):
     if not isinstance(changes, list) or not changes:
         raise ValueError('Corrections must be a nonempty list.')
     packet = copy.deepcopy(base)
-    _, fields = inventory()
+    form = form_definition(base['form_id'])
+    _, fields = inventory(form['template_path'])
     seen = set()
     for change in changes:
         if not isinstance(change, dict) or set(change) - {'field_id', 'semantic', 'value', 'statement'} or not {'field_id', 'value', 'statement'} <= set(change):
@@ -472,7 +462,7 @@ def apply_corrections(packet_path, run_dir, stage_path):
 def review_packet(packet_path, before=None):
     packet = read(packet_path)
     previous = read(before) if before else None
-    if previous and (previous['sources'] != packet['sources'] or previous['template_sha256'] != packet['template_sha256']):
+    if previous and (previous['form_id'] != packet['form_id'] or previous['sources'] != packet['sources'] or previous['template_sha256'] != packet['template_sha256']):
         raise ValueError('Cannot compare packets from different sources or templates.')
     prior = {a['field_id']: a for a in previous['assignments']} if previous else {}
     current = {a['field_id']: a for a in packet['assignments']}
@@ -511,12 +501,13 @@ def review_markdown(report):
     return '\n'.join(lines) + '\n'
 
 
-def field_preview(fid, pdf, out):
+def field_preview(fid, pdf, out, form_id):
     import pypdfium2 as pdfium
-    _, fields = inventory()
+    form = form_definition(form_id)
+    _, fields = inventory(form['template_path'])
     if fid not in fields: raise ValueError('Unknown template field.')
     reader, actual = inventory(pdf)
-    template_reader = PdfReader(TEMPLATE)
+    template_reader = PdfReader(form['template_path'])
     if len(reader.pages) != len(template_reader.pages) or fid not in actual or actual[fid]['widgets'] != fields[fid]['widgets']:
         raise ValueError('Preview requires the known template or its generated draft.')
     out = Path(out)
@@ -553,19 +544,17 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     sp = ap.add_subparsers(dest='cmd', required=True)
     sp.add_parser('doctor')
-    p = sp.add_parser('inspect'); p.add_argument('--match', default=''); p.add_argument('--out')
+    p = sp.add_parser('inspect'); p.add_argument('--form', required=True); p.add_argument('--match', default=''); p.add_argument('--out')
     p = sp.add_parser('prepare'); p.add_argument('--input-dir', required=True); p.add_argument('--run-dir', required=True)
     for name in ('validate', 'fill'):
         p = sp.add_parser(name); p.add_argument('--packet', required=True); p.add_argument('--run-dir', required=True)
     p = sp.add_parser('verify'); p.add_argument('--pdf', required=True); p.add_argument('--packet', required=True)
     p = sp.add_parser('render'); p.add_argument('--pdf', required=True); p.add_argument('--out', required=True)
-    p = sp.add_parser('resolve'); p.add_argument('--packet', required=True); p.add_argument('--run-dir', required=True)
-    p.add_argument('--field', required=True); p.add_argument('--value', required=True); p.add_argument('--statement', required=True)
     p = sp.add_parser('review'); p.add_argument('--packet', required=True); p.add_argument('--before'); p.add_argument('--format', choices=['json','markdown'], default='json')
     p = sp.add_parser('stage-corrections'); p.add_argument('--packet', required=True); p.add_argument('--run-dir', required=True)
     p.add_argument('--changes', required=True); p.add_argument('--out', required=True)
     p = sp.add_parser('apply-corrections'); p.add_argument('--packet', required=True); p.add_argument('--run-dir', required=True); p.add_argument('--stage', required=True)
-    p = sp.add_parser('field-preview'); p.add_argument('--field', required=True); p.add_argument('--pdf', default=str(TEMPLATE)); p.add_argument('--out', required=True)
+    p = sp.add_parser('field-preview'); p.add_argument('--form', required=True); p.add_argument('--field', required=True); p.add_argument('--pdf'); p.add_argument('--out', required=True)
     p = sp.add_parser('record-visual-review'); p.add_argument('--revision-dir', required=True)
     p.add_argument('--result', choices=['pass','fail'], required=True); p.add_argument('--note', required=True)
     args = ap.parse_args()
@@ -573,9 +562,9 @@ def main():
         if args.cmd == 'doctor':
             import importlib.metadata
             result = {p: importlib.metadata.version(p) for p in ['pypdf','pypdfium2','jsonschema','Pillow']}
-            result['template_exists'] = TEMPLATE.is_file()
+            result['registered_forms'] = {form_id: str(form_definition(form_id)['template_path']) for form_id in read(FORM_REGISTRY)}
         elif args.cmd == 'inspect':
-            _, fields = inventory()
+            _, fields = inventory(form_definition(args.form)['template_path'])
             result = {k:v for k,v in fields.items() if args.match.lower() in (k+' '+v['label']).lower()}
             if args.out: save(args.out, result); result = {'fields':len(result),'path':args.out}
         elif args.cmd == 'prepare': result = prepare(args.input_dir, args.run_dir)
@@ -588,18 +577,19 @@ def main():
             result = verify(args.pdf, read(args.packet))
             if not result['technical_pass']: print(json.dumps(result)); return 1
         elif args.cmd == 'render': render(args.pdf,args.out); result = {'pages':args.out}
-        elif args.cmd == 'resolve': result = resolve_value(args.packet,args.run_dir,args.field,args.value,args.statement)
         elif args.cmd == 'review':
             result = review_packet(args.packet, args.before)
             if args.format == 'markdown': print(review_markdown(result)); return 0
         elif args.cmd == 'stage-corrections': result = stage_corrections(args.packet, args.run_dir, read(args.changes), args.out)
         elif args.cmd == 'apply-corrections': result = apply_corrections(args.packet, args.run_dir, args.stage)
-        elif args.cmd == 'field-preview': result = field_preview(args.field, args.pdf, args.out)
+        elif args.cmd == 'field-preview':
+            form = form_definition(args.form)
+            result = field_preview(args.field, args.pdf or form['template_path'], args.out, args.form)
         else:
             folder = Path(args.revision_dir)
             path = folder / 'verification.json'
             result = read(path)
-            if result['pdf_sha256'] != digest(folder / 'acord-125-draft.pdf'): raise ValueError('PDF changed after verification.')
+            if result['pdf_sha256'] != digest(folder / result['output_filename']): raise ValueError('PDF changed after verification.')
             if result['packet_sha256'] != digest(folder / 'packet.json'): raise ValueError('Packet changed after verification.')
             result.update(visual_review=args.result, visual_review_note=args.note, visual_review_at=now())
             save(path,result)

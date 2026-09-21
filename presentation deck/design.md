@@ -191,3 +191,28 @@ These layouts define the visual system; they do not prescribe the final table of
 - [ ] Final export has no substituted fonts, overflow, or missing assets.
 
 **Design north star:** make the work feel at home in Cooper's visual world while keeping the customer's workflow and the candidate's evidence at the center.
+
+
+## 13. Locked image-slide master — 21 September 2026
+
+This section overrides earlier flexible typography/layout recommendations for the current image deck. Do not independently art-direct each slide header.
+
+- **Reference master:** `cooperai-images/slide-02.png`, Account Context. Match its regular high-contrast serif headline and Inter-like sans-serif body. Never use serif for Q&A body text or bold/heavy serif headlines.
+- **Canvas:** 1672 × 941 px, 16:9. Scale all geometry proportionally for higher-resolution exports.
+- **Content slides 2–15:** left margin 64 px, right margin 64 px. Eyebrow top 58 px, 16 px tracked uppercase sans serif. Slide number 16 px sans serif at top-right, x≈1588/y58. Never enlarge it or move it to the left.
+- **Title:** x64/y112, fixed 76 px regular serif with 1.1 line height, same font and size on every content slide. One line inside a 1544 px-wide header area. The longest title is the fit test; if it cannot fit, lower the title size for ALL content slides together, never only one. Header divider at y247.
+- **Body:** begins at y292. Section labels 22 px sans serif semibold; body 25–28 px sans serif regular. All Q&A questions 25 px semibold sans serif and answers 24 px regular sans serif. Split discovery over slides 3–4: five Q&As per slide, with one decision per section. Preserve the master header.
+- **Footer:** same x64 alignment, 15 px sans serif, bottom baseline about y899. Reserve the bottom 42 px for source/qualification copy.
+- **Palette:** exact ivory, parchment, espresso and burnt-orange tokens above. Fine espresso rules; no independent font substitutions, bright-orange drift, random title treatments, or oversized closing slogans.
+- **Cover exception:** slide 1 deliberately uses the photographic full-bleed hero and large ivory serif headline. Use the same serif family as content slides and the same sans-serif family for its subtitle, presenter, and role. The title's larger size and position are the only intentional header exceptions.
+- **Generation method:** edit from the same reference master, not five unrelated prompts. Preserve main content and inspect the results side by side. Image generation can approximate typography; do not claim pixel-identical fonts or positions without checking.
+- **Acceptance:** all content-slide titles share font appearance, size, left edge, top edge, rule position, and small top-right numbering. All body copy uses the common sans serif. Current MVP input text says exactly one CSV + one insurance PDF; request JSON is not part of the current workflow.
+
+
+## Audience-facing copy
+
+Slides address the panel, not the presenter. Describe product behavior, decisions, evidence and outcomes. Keep rehearsal directions such as “show,” “open,” “label,” and “inspect during the demo” off the slide. Do not expose asset-production commentary such as “not a product screenshot.” Retain meaningful factual qualifications, including hypothetical customer assumptions, proposed targets and fictional test fixtures, where needed to interpret evidence.
+
+- Use plain audience language for validation: “development context,” “fictional test account,” and “typed answers or skipped questions.” Avoid unexplained test jargon.
+- Put delivery status in next steps, not feature scope. State a limitation once where it affects interpretation; avoid commentary about what is “claimed.”
+- Label potential savings next to the metric itself, not only in a footer.

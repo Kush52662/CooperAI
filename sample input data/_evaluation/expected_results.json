@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
-  "dataset_status": "Four development/demo cases; not the 20-case pilot evaluation set proposed in docs/CALL_BRIEF.md.",
+  "dataset_status": "Three development/demo cases for three companies; not the 20-case pilot evaluation set proposed in docs/CALL_BRIEF.md.",
   "output_template": "../output_template/acord_125_blank_fillable.pdf",
-  "evaluation_rule": "Upload only the three files inside a numbered case folder. Never expose this ground-truth file to the agent under test.",
+  "evaluation_rule": "Upload only the CSV and insurance PDF inside a numbered case folder. Never expose this ground-truth file to the agent under test.",
   "common_requested_application": {
     "transaction_status": "QUOTE",
     "proposed_effective_date": "10/01/2026",
@@ -42,42 +42,10 @@
         {"field": "prior_coverage.general_liability.effective_date", "value": "09/20/2024", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
         {"field": "prior_coverage.general_liability.expiration_date", "value": "09/20/2025", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
         {"field": "prior_coverage.general_liability.premium", "value": "510.00", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
-        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["submission_request.json"]},
-        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["submission_request.json"]}
+        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["ams360_customer_policy_export.csv"]},
+        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["ams360_customer_policy_export.csv"]}
       ],
       "conflicts": [],
-      "case_specific_blanks": []
-    },
-    {
-      "id": "01_lawn_and_order_mowing",
-      "purpose": "Document conflict and rendered-page-versus-embedded-text challenge.",
-      "supported_values": [
-        {"field": "applicant.name", "value": "Lawn and Order Mowing LLC", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1", "insurance_document.pdf#page=2"]},
-        {"field": "applicant.mailing_address.line1", "value": "425 Rance Buck Rd", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1", "insurance_document.pdf#page=2"]},
-        {"field": "applicant.legal_entity", "value": "Limited Liability Company", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2"]},
-        {"field": "prior_coverage.general_liability.policy_number", "value": "S 2650207", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1", "insurance_document.pdf#page=2"]},
-        {"field": "prior_coverage.general_liability.premium", "value": "510.00", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2", "insurance_document.pdf#page=5"], "note": "CGL policy premium, not a combined premium across every coverage shown on the certificate."},
-        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["submission_request.json"]},
-        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["submission_request.json"]}
-      ],
-      "conflicts": [
-        {
-          "field": "prior_coverage.general_liability.policy_period",
-          "values": [
-            {"value": "09/20/2024-09/20/2025", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2", "insurance_document.pdf#page=5"]},
-            {"value": "12/20/2024-12/20/2025", "sources": ["insurance_document.pdf#page=1 (visually rendered CGL row)"]}
-          ],
-          "expected_action": "Flag for human review; do not silently select either period."
-        },
-        {
-          "field": "insurance_document.pdf#page=1 extraction",
-          "values": [
-            {"value": "Visible certificate values", "sources": ["rendered page"]},
-            {"value": "Overlapping/stale values in the PDF text layer", "sources": ["embedded text extraction"]}
-          ],
-          "expected_action": "Treat layout-aware rendering as required evidence and flag the discrepancy."
-        }
-      ],
       "case_specific_blanks": []
     },
     {
@@ -91,8 +59,8 @@
         {"field": "applicant.legal_entity", "value": "Corporation", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2"]},
         {"field": "applicant.nature_of_business", "value": "Grading contractor", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2"]},
         {"field": "prior_coverage.umbrella.premium", "value": "11388.00", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2"], "note": "Umbrella-specific estimated total premium; not the total premium for all certificate coverages."},
-        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["submission_request.json"]},
-        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["submission_request.json"]}
+        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["ams360_customer_policy_export.csv"]},
+        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["ams360_customer_policy_export.csv"]}
       ],
       "conflicts": [
         {
@@ -125,8 +93,8 @@
         {"field": "prior_coverage.general_liability.policy_number", "value": "S 2652387", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
         {"field": "prior_coverage.general_liability.effective_date", "value": "01/01/2025", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
         {"field": "prior_coverage.general_liability.expiration_date", "value": "01/01/2026", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
-        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["submission_request.json"]},
-        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["submission_request.json"]}
+        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["ams360_customer_policy_export.csv"]},
+        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["ams360_customer_policy_export.csv"]}
       ],
       "conflicts": [
         {
