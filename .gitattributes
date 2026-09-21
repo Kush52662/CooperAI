@@ -1,0 +1,4 @@
+# Markdown uses intentional two-space line breaks.
+*.md whitespace=-blank-at-eol
+# Preserve the supplied CSV bytes and accept their CRLF line endings.
+*.csv -text whitespace=cr-at-eol

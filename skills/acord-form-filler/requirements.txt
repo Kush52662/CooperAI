@@ -1,0 +1,5 @@
+pypdf==6.10.0
+pypdfium2==5.13.0
+jsonschema==4.26.0
+
+Pillow==12.1.1

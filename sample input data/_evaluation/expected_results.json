@@ -1,0 +1,144 @@
+{
+  "schema_version": "1.0",
+  "dataset_status": "Four development/demo cases; not the 20-case pilot evaluation set proposed in docs/CALL_BRIEF.md.",
+  "output_template": "../output_template/acord_125_blank_fillable.pdf",
+  "evaluation_rule": "Upload only the three files inside a numbered case folder. Never expose this ground-truth file to the agent under test.",
+  "common_requested_application": {
+    "transaction_status": "QUOTE",
+    "proposed_effective_date": "10/01/2026",
+    "proposed_expiration_date": "10/01/2027",
+    "requested_lines_of_business": ["Commercial General Liability"]
+  },
+  "common_fields_that_must_remain_blank": [
+    "agency name and contact fields",
+    "proposed carrier and proposed policy number",
+    "FEIN",
+    "SIC",
+    "NAICS",
+    "website",
+    "date business started",
+    "employee counts",
+    "annual revenue",
+    "requested premium",
+    "loss history",
+    "unsupported general-information answers",
+    "applicant and producer signatures"
+  ],
+  "cases": [
+    {
+      "id": "00_clean_walkthrough",
+      "purpose": "First successful walkthrough with internally consistent CSV and declaration pages.",
+      "supported_values": [
+        {"field": "applicant.name", "value": "LAWN AND ORDER MOWING LLC", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.line1", "value": "425 RANCE BUCK RD", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.city", "value": "VANCEBORO", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.state", "value": "NC", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.postal_code", "value": "28586-9065", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.business_phone", "value": "(252) 626-1278", "sources": ["ams360_customer_policy_export.csv"]},
+        {"field": "applicant.legal_entity", "value": "Limited Liability Company", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.nature_of_business", "value": "Lawn care services", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=3"]},
+        {"field": "prior_coverage.general_liability.carrier", "value": "Selective Insurance Company of the Southeast", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "prior_coverage.general_liability.policy_number", "value": "S 2650207", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "prior_coverage.general_liability.effective_date", "value": "09/20/2024", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "prior_coverage.general_liability.expiration_date", "value": "09/20/2025", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "prior_coverage.general_liability.premium", "value": "510.00", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["submission_request.json"]},
+        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["submission_request.json"]}
+      ],
+      "conflicts": [],
+      "case_specific_blanks": []
+    },
+    {
+      "id": "01_lawn_and_order_mowing",
+      "purpose": "Document conflict and rendered-page-versus-embedded-text challenge.",
+      "supported_values": [
+        {"field": "applicant.name", "value": "Lawn and Order Mowing LLC", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1", "insurance_document.pdf#page=2"]},
+        {"field": "applicant.mailing_address.line1", "value": "425 Rance Buck Rd", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1", "insurance_document.pdf#page=2"]},
+        {"field": "applicant.legal_entity", "value": "Limited Liability Company", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2"]},
+        {"field": "prior_coverage.general_liability.policy_number", "value": "S 2650207", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1", "insurance_document.pdf#page=2"]},
+        {"field": "prior_coverage.general_liability.premium", "value": "510.00", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2", "insurance_document.pdf#page=5"], "note": "CGL policy premium, not a combined premium across every coverage shown on the certificate."},
+        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["submission_request.json"]},
+        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["submission_request.json"]}
+      ],
+      "conflicts": [
+        {
+          "field": "prior_coverage.general_liability.policy_period",
+          "values": [
+            {"value": "09/20/2024-09/20/2025", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2", "insurance_document.pdf#page=5"]},
+            {"value": "12/20/2024-12/20/2025", "sources": ["insurance_document.pdf#page=1 (visually rendered CGL row)"]}
+          ],
+          "expected_action": "Flag for human review; do not silently select either period."
+        },
+        {
+          "field": "insurance_document.pdf#page=1 extraction",
+          "values": [
+            {"value": "Visible certificate values", "sources": ["rendered page"]},
+            {"value": "Overlapping/stale values in the PDF text layer", "sources": ["embedded text extraction"]}
+          ],
+          "expected_action": "Treat layout-aware rendering as required evidence and flag the discrepancy."
+        }
+      ],
+      "case_specific_blanks": []
+    },
+    {
+      "id": "02_watson_contracting",
+      "purpose": "Same entity with address and policy-identifier conflicts.",
+      "supported_values": [
+        {"field": "applicant.name", "value": "Watson Contracting Inc", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.city", "value": "Franklin", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.state", "value": "NC", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.postal_code", "value": "28734", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.legal_entity", "value": "Corporation", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2"]},
+        {"field": "applicant.nature_of_business", "value": "Grading contractor", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2"]},
+        {"field": "prior_coverage.umbrella.premium", "value": "11388.00", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=2"], "note": "Umbrella-specific estimated total premium; not the total premium for all certificate coverages."},
+        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["submission_request.json"]},
+        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["submission_request.json"]}
+      ],
+      "conflicts": [
+        {
+          "field": "applicant.mailing_address.line1",
+          "values": [
+            {"value": "3940 Old Murphy Road", "sources": ["ams360_customer_policy_export.csv"]},
+            {"value": "3883 Old Murphy Road", "sources": ["insurance_document.pdf#page=1"]}
+          ],
+          "expected_action": "Flag for human review; preserve both sources."
+        },
+        {
+          "field": "prior_coverage.policy_identifier",
+          "values": [
+            {"value": "S2343300", "sources": ["insurance_document.pdf#page=1"]},
+            {"value": "S 234330005", "sources": ["insurance_document.pdf#page=2 underlying CGL and auto schedules"]}
+          ],
+          "expected_action": "Preserve the coverage-specific representation; do not collapse identifiers without a documented carrier rule."
+        }
+      ],
+      "case_specific_blanks": []
+    },
+    {
+      "id": "03_tarheel_paving",
+      "purpose": "Sparse-input case with a legal-name variation.",
+      "supported_values": [
+        {"field": "applicant.mailing_address.line1", "value": "1310 N Main St", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.city", "value": "Hendersonville", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.state", "value": "NC", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "applicant.mailing_address.postal_code", "value": "28792", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "prior_coverage.general_liability.policy_number", "value": "S 2652387", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "prior_coverage.general_liability.effective_date", "value": "01/01/2025", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "prior_coverage.general_liability.expiration_date", "value": "01/01/2026", "sources": ["ams360_customer_policy_export.csv", "insurance_document.pdf#page=1"]},
+        {"field": "policy.proposed_effective_date", "value": "10/01/2026", "sources": ["submission_request.json"]},
+        {"field": "policy.proposed_expiration_date", "value": "10/01/2027", "sources": ["submission_request.json"]}
+      ],
+      "conflicts": [
+        {
+          "field": "applicant.name",
+          "values": [
+            {"value": "Tarheel Paving & Asphalt Company Inc.", "sources": ["ams360_customer_policy_export.csv"]},
+            {"value": "Tarheel Paving and Asphalt Inc.", "sources": ["insurance_document.pdf#page=1"]}
+          ],
+          "expected_action": "Flag the variation. Do not assert legal equivalence without an authoritative matching key."
+        }
+      ],
+      "case_specific_blanks": ["applicant.legal_entity", "applicant.business_phone", "prior_coverage.general_liability.premium"]
+    }
+  ]
+}

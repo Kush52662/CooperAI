@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version","template_sha256","sources","revision","assignments","issues","history"],
+  "properties": {
+    "schema_version": {"const":"1.0"},
+    "template_sha256": {"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "sources": {"type":"array","minItems":3,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["file","sha256"],"properties":{"file":{"type":"string"},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}}}},
+    "revision":{"type":"integer","minimum":1},
+    "assignments":{"type":"array","items":{"$ref":"#/$defs/assignment"}},
+    "issues":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["field","message","evidence"],"properties":{"field":{"type":"string","minLength":1},"message":{"type":"string","minLength":1},"evidence":{"type":"array","items":{"$ref":"#/$defs/evidence"}}}}},
+    "history":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["at","field_id","previous_value","previous_status","statement"],"properties":{"at":{"type":"string"},"field_id":{"type":"string"},"previous_value":{"type":["string","null"]},"previous_status":{"type":"string"},"statement":{"type":"string","minLength":1}}}}
+  },
+  "$defs": {
+    "evidence":{"type":"object","additionalProperties":false,"required":["file","quote"],"properties":{"file":{"type":"string","minLength":1},"quote":{"type":"string","minLength":1},"page":{"type":"integer","minimum":1},"column":{"type":"string"},"key":{"type":"string"},"channel":{"enum":["rendered","text"]}}},
+    "assignment":{"type":"object","additionalProperties":false,"required":["semantic","field_id","value","status","evidence","alternatives","note"],"properties":{
+      "semantic":{"type":"string","minLength":1},"field_id":{"type":"string","minLength":1},"value":{"type":["string","null"]},
+      "status":{"enum":["supported","missing","conflict","user_confirmed"]},
+      "evidence":{"type":"array","items":{"$ref":"#/$defs/evidence"}},
+      "alternatives":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["value","evidence"],"properties":{"value":{"type":"string","minLength":1},"evidence":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/evidence"}}}}},
+      "note":{"type":"string"}
+    }}
+  }
+}

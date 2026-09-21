@@ -1,0 +1,10 @@
+{
+  "output_form": "ACORD 125 (2016/03)",
+  "transaction_status": "QUOTE",
+  "proposed_effective_date": "10/01/2026",
+  "proposed_expiration_date": "10/01/2027",
+  "requested_lines_of_business": [
+    "Commercial General Liability"
+  ],
+  "instruction": "Use these proposed dates for the new application. Treat dates in the CSV and insurance PDF as historical/current-policy evidence only."
+}
